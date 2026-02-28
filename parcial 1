@@ -1,1 +1,101 @@
+CREATE TABLE usuario (
+    id_usuario SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    telefono VARCHAR(20),
+    fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(20) NOT NULL CHECK (estado IN ('activo','suspendido','eliminado'))
+);
 
+CREATE TABLE autenticacion (
+    id_autenticacion SERIAL PRIMARY KEY,
+    id_usuario INTEGER NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    salt VARCHAR(255) NOT NULL,
+    fecha_ultimo_login TIMESTAMP,
+    intentos_fallidos INTEGER NOT NULL DEFAULT 0,
+    estado_bloqueo BOOLEAN NOT NULL DEFAULT FALSE,
+    
+    CONSTRAINT fk_autenticacion_usuario
+        FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id_usuario)
+        ON DELETE CASCADE
+);
+
+
+CREATE TABLE servicio (
+    id_servicio SERIAL PRIMARY KEY,
+    nombre_servicio VARCHAR(150) NOT NULL,
+    descripcion TEXT,
+    precio_base NUMERIC(12,2) NOT NULL CHECK (precio_base >= 0),
+    estado VARCHAR(20) NOT NULL CHECK (estado IN ('activo','inactivo')),
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE contratacion (
+    id_contratacion SERIAL PRIMARY KEY,
+    id_usuario INTEGER NOT NULL,
+    id_servicio INTEGER NOT NULL,
+    fecha_contratacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE,
+    estado VARCHAR(20) NOT NULL CHECK (estado IN ('activo','cancelado','vencido')),
+    precio_aplicado NUMERIC(12,2) NOT NULL CHECK (precio_aplicado >= 0),
+
+    CONSTRAINT fk_contratacion_usuario
+        FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id_usuario)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_contratacion_servicio
+        FOREIGN KEY (id_servicio)
+        REFERENCES servicio(id_servicio)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_fechas_contratacion
+        CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio)
+);
+
+-- Índice para mejorar consultas por usuario
+CREATE INDEX idx_contratacion_usuario ON contratacion(id_usuario);
+
+
+CREATE TABLE pago (
+    id_pago SERIAL PRIMARY KEY,
+    id_contratacion INTEGER NOT NULL,
+    fecha_pago TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    monto NUMERIC(12,2) NOT NULL CHECK (monto >= 0),
+    metodo_pago VARCHAR(50) NOT NULL,
+    estado_pago VARCHAR(20) NOT NULL CHECK (estado_pago IN ('pendiente','aprobado','rechazado')),
+    referencia_transaccion VARCHAR(150),
+
+    CONSTRAINT fk_pago_contratacion
+        FOREIGN KEY (id_contratacion)
+        REFERENCES contratacion(id_contratacion)
+        ON DELETE CASCADE
+);
+
+-- Índice para consultas financieras
+CREATE INDEX idx_pago_contratacion ON pago(id_contratacion);
+
+
+CREATE TABLE auditoria_acceso (
+    id_auditoria SERIAL PRIMARY KEY,
+    id_usuario INTEGER NOT NULL,
+    fecha_hora TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    direccion_ip VARCHAR(45) NOT NULL,
+    dispositivo VARCHAR(200),
+    resultado VARCHAR(20) NOT NULL CHECK (resultado IN ('exitoso','fallido')),
+    tipo_evento VARCHAR(30) NOT NULL CHECK (tipo_evento IN ('login','logout','cambio_password')),
+
+    CONSTRAINT fk_auditoria_usuario
+        FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id_usuario)
+        ON DELETE CASCADE
+);
+
+-- Índice para auditoría
+CREATE INDEX idx_auditoria_usuario ON auditoria_acceso(id_usuario);
+CREATE INDEX idx_auditoria_fecha ON auditoria_acceso(fecha_hora);
